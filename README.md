@@ -4,12 +4,13 @@
 plaintext-serialisable files and provide a friendly interface to view and edit
 them.**
 
-This document distils the design of the reference app
-(`qdvc-markdown-notebook-android`) into a general specification for building a
-family of comparable apps — e.g. notebooks, task lists, recipe collections,
-config editors — that share the same shape: point the app at real device
-folders, browse a hierarchy, open items into a multitasking switcher, and
-view/edit them with theming and fonts under the user's control.
+This document is a general specification for building a family of comparable
+apps — e.g. notebooks, task lists, recipe collections, config editors — that
+share the same shape: point the app at real device folders, browse a hierarchy,
+open items into a multitasking switcher, and view/edit them with theming and
+fonts under the user's control. Where it gives concrete examples, it draws them
+from a notebook-style app that opens folders of Markdown notes; those examples
+illustrate the general pattern and are called out as such.
 
 It has two halves, deliberately separated so that design and engineering can
 evolve independently:
@@ -17,8 +18,8 @@ evolve independently:
 - **Part A — User experience.** What the app looks like and how it behaves, in
   terms a designer or product owner can review, with no implementation detail.
 - **Part B — Technical implementation.** How Part A is realised in Kotlin +
-  Jetpack Compose on Android, following the patterns proven in the reference
-  app.
+  Jetpack Compose on Android, with the specific patterns and pitfalls that carry
+  the design's guarantees.
 
 Throughout, the term **item** denotes whatever the app opens and edits (a note,
 a task file, a recipe); **structure** denotes the organising surface (a folder
@@ -51,19 +52,19 @@ deliberately open meaning for the two in the middle:
    de-facto homepage. It presents the app's structures hierarchically and lets
    the user drill down into them to find items to open.
 2. **Item 2 — App-specific surface (not prescribed).** Its meaning depends on
-   the app. In the reference app this is the read-only **View** of the current
-   item.
-3. **Item 3 — App-specific surface (not prescribed).** As above. In the
-   reference app this is the editable **Edit** view of the current item.
+   the app. A common choice is a read-only **View** of the current item.
+3. **Item 3 — App-specific surface (not prescribed).** As above. A common
+   choice is an editable **Edit** view of the current item.
 4. **Item 4 — Multitasking switcher (prescribed).** A switcher between open
    items, equivalent to a browser's tab bar. Items are opened from Item 1's
    structures and closed here.
 
 Items 2 and 3 are the app author's to define. They will typically be surfaces
-that act on **the currently-selected item** (as the reference app's View/Edit
-do), but the spec does not require this; an app could instead make them
-alternative top-level structure browsers. What the spec *does* require is that
-Item 1 is a home/browse surface and Item 4 is a multitasking switcher.
+that act on **the currently-selected item** — for example a read-only View and
+an editable Edit of the current item — but the spec does not require this; an
+app could instead make them alternative top-level structure browsers (say, a
+tag list and a favourites list). What the spec *does* require is that Item 1 is
+a home/browse surface and Item 4 is a multitasking switcher.
 
 Where a surface (such as Item 2 or 3) requires a selected item and none is
 open, its bottom-bar item is shown **disabled** rather than hidden, so the bar's
@@ -77,7 +78,8 @@ Structures are hierarchical and are traversed by drilling in and stepping back
 out. The **top of the hierarchy is the app's home screen** — the first thing a
 new user sees and the anchor everything else hangs from.
 
-In the reference app the hierarchy is:
+A representative hierarchy — the one a notebook-style app would use — looks
+like this:
 
 ```
 Workspace list  (the home root)
@@ -130,12 +132,13 @@ see B7).
 
 The home root offers a clear affordance to **add a workspace** (grant a new
 device folder) and, per workspace row, to **remove** it from the list (removing
-only the app's reference — never deleting the user's files, with a confirmation
-dialog that says so).
+only the app's pointer to that folder — never deleting the user's files, with a
+confirmation dialog that says so).
 
 ## A3. Items 2 & 3 — app-specific surfaces
 
-Not prescribed. The reference app uses them as:
+Not prescribed. The most common and recommended choice is a **View / Edit**
+pair acting on the current item:
 
 - **View** — a read-only rendering of the current item. Content is presented in
   a fixed-width, single-size layout where structure (headings, emphasis, lists)
@@ -162,7 +165,8 @@ The switcher is the phone equivalent of a desktop tab bar.
   workspace it belongs to). An item with unsaved edits is marked (e.g. a
   trailing bullet).
 - **Tapping** a row makes that item current and takes the user to the
-  appropriate surface (View in the reference app).
+  appropriate surface (e.g. the read-only View, when Items 2/3 are a View/Edit
+  pair).
 - **Opening** a new item is done from Item 1 (drill to an item and tap it); it
   then appears here and becomes current.
 - **Closing** uses a **swipe-to-close** gesture (like the swipe-to-archive
@@ -193,23 +197,23 @@ horizontal slide** animation as Item 1, and obeys the **same back-button rule**
 (the toolbar back arrow and system back share one handler; at the Settings root,
 back closes Settings).
 
-The reference app's Settings contains:
+A typical Settings screen for an app in this family contains:
 
 - **Appearance** — choose Automatic / Light / Dark.
 - **Light Mode Style** and **Dark Mode Style** — choose which colour theme is
   used in each mode, from the installed themes (see A6).
-- **Fonts** — an independent font choice for each of the two item surfaces
-  (View and Edit). Each offers: the app **default**, any **device-installed
-  font**, or a **custom font** (see below). Font rows preview themselves in
-  the font they name.
-- **Font size** — an independent size for each surface, adjusted with −/+
+- **Fonts** — an independent font choice for each item surface that renders text
+  (for a View/Edit pair, one for each). Each offers: the app **default**, any
+  **device-installed font**, or a **custom font** (see below). Font rows preview
+  themselves in the font they name.
+- **Font size** — an independent size for each such surface, adjusted with −/+
   steppers between sensible bounds, with a one-tap **Reset** to default.
 
 ### Custom fonts (the four-variant pattern)
 
 When an app supports custom fonts, it follows this exact pattern:
 
-- Each font context (here, View and Edit) has **four variant slots**:
+- Each font context (e.g. View and Edit) has **four variant slots**:
   **regular, italic, bold, bold-italic**.
 - The user picks **one file per slot**. The chosen file is **copied into the
   app's own storage** (so it cannot vanish if the user later moves or deletes
@@ -223,20 +227,23 @@ When an app supports custom fonts, it follows this exact pattern:
 ## A6. Theming and colour
 
 - **Light / dark / automatic** mode selection (automatic follows the system).
-- **Colour themes** are selectable independently for light and dark mode. The
-  reference app ships Regular (light/dark), Everforest (light/dark), Rosé Pine
-  (main/moon/dawn), and a **pure-black OLED** dark theme. Adding a new theme is
-  a data change, not a code change (see B5).
+- **Colour themes** are selectable independently for light and dark mode. Ship a
+  sensible spread: at least one default light and dark theme, and it is worth
+  including a **pure-black OLED** dark theme (background `#000000`) for
+  battery/contrast on OLED screens. Adding a new theme is a data change, not a
+  code change (see B5), so shipping several named themes costs almost nothing.
 - Syntax/structure highlighting **derives its colours from the active theme**,
   so a new theme restyles content automatically with no extra work.
 - **System-bar colour matching.** The Android **status bar** (clock,
   notifications, battery) and **navigation bar** (back/home/recents) are
   coloured to match the app's own bars, so the system chrome blends into the
-  app. In the reference app the app's top toolbar and bottom navigation bar
-  share one surface colour, and both system bars are set to that same colour;
-  the light/dark setting drives the contrast of the system-bar icons so they
-  never render as plain black on a dark app or vice-versa. New apps should
-  follow this same approach.
+  app. The approach to use: give the app's top toolbar and bottom navigation bar
+  a single shared surface colour, and set both system bars to that same colour;
+  then let the light/dark setting drive the contrast of the system-bar icons so
+  they never render as plain black on a dark app or vice-versa. (Using one
+  colour for both app bars is what lets a single colour match both system bars;
+  it is a deliberate simplification and part of what makes the whole top-and-
+  bottom of the screen read as one continuous surface.)
 
 ## A7. Full-text search and its index
 
@@ -276,9 +283,11 @@ When an app offers full-text search over a workspace:
 
 # Part B — Technical implementation
 
-This part maps Part A onto concrete Android + Kotlin technologies, following the
-reference app. It is prescriptive about the patterns that carry the design's
-guarantees and flags the traps that have already been hit and fixed.
+This part maps Part A onto concrete Android + Kotlin technologies. It is
+prescriptive about the patterns that carry the design's guarantees, and it flags
+the traps that are easy to fall into — several of these are non-obvious and have
+each cost real debugging time to diagnose, so they are documented here with
+their root cause rather than just their fix.
 
 ## B0. Platform, language, and build
 
@@ -291,10 +300,12 @@ guarantees and flags the traps that have already been hit and fixed.
   **JDK 17**.
 - **Build:** Gradle with the Kotlin DSL. Compose is enabled via
   `buildFeatures.compose` with a pinned `kotlinCompilerExtensionVersion`
-  matched to the Kotlin version (the reference app uses Kotlin `1.9.24` with
-  compiler extension `1.5.14` and the Compose BOM `2024.06.00`; if you move to
-  Kotlin 2.0+, switch to the `org.jetbrains.kotlin.plugin.compose` plugin
-  instead).
+  matched to the Kotlin version. A known-good combination is Kotlin `1.9.24`
+  with compiler extension `1.5.14` and the Compose BOM `2024.06.00`. Note the
+  version coupling: on Kotlin 1.9.x the compiler extension is a separate pinned
+  version as shown; if you move to Kotlin 2.0+, the mechanism changes — drop the
+  extension version and apply the `org.jetbrains.kotlin.plugin.compose` plugin
+  instead.
 - **Key dependencies:** Compose BOM (ui, graphics, material3,
   material-icons-extended, foundation); `activity-compose`;
   `lifecycle-viewmodel-compose`; **DataStore Preferences** (settings);
@@ -325,7 +336,7 @@ Reading rule for maintainers: *what state exists* → read the ViewModel; *how
 something is stored or fetched* → read the matching repository; screens are just
 projections of that state.
 
-Recommended package layout (mirrors the reference app):
+Recommended package layout:
 
 ```
 app/
@@ -403,9 +414,11 @@ with a "cleaner" rewrite.
   existence with `DocumentFile.fromSingleUri(...).exists()` when restoring a
   session.
 
-Generalisation note: the reference app filters for `.md`/`.markdown`. A sibling
-app changes only the extension/MIME predicate and the write MIME type; the rest
-of the SAF layer is identical.
+Adapting to a different item type: the only file-type-specific parts of the SAF
+layer are the predicate that decides which files count as items (e.g. an
+extension filter such as `.md`/`.markdown` for a notebook app) and the MIME type
+passed when creating a new item. Everything else — tree traversal, reads,
+writes, existence checks — is identical across apps in this family.
 
 ## B4. System-bar colour matching
 
@@ -438,9 +451,11 @@ both use `surface`, one colour matches both system bars.
   caches the result, and sorts them. Light themes populate the Light Mode Style
   list, dark ones the Dark Mode Style list, keyed off `dark`.
 - A theme spec becomes a Compose `ColorScheme` by starting from
-  `lightColorScheme()`/`darkColorScheme()` and `copy()`-ing the roles across
-  (map both `surface` and `onSurface` sensibly — the reference app points
-  `onSurface` at the theme's `onBackground`).
+  `lightColorScheme()`/`darkColorScheme()` and `copy()`-ing the roles across.
+  Map both `surface` and `onSurface` sensibly; a simple, robust choice is to
+  point `onSurface` at the theme's `onBackground` value (so text reads correctly
+  on both `background` and `surface`, which are close in these themes) rather
+  than requiring the JSON to specify an `onSurface` separately.
 - **Adding a theme is a data change:** drop in a new JSON file and it appears
   automatically; the selected theme is persisted by `id`, with defaults for
   light and dark. A pure-black OLED theme is just a dark theme whose background
@@ -454,12 +469,15 @@ both use `surface`, one colour matches both system bars.
 - **Swipe-to-close:** place the red close action *behind* the row and translate
   the foreground row horizontally to reveal it. The revealed strip must contain
   an **X icon above a "Close" label**, centred in the strip.
-  - **Unit-mismatch trap (already hit and fixed):** the reveal strip is sized in
-    **dp** but `graphicsLayer { translationX = ... }` is in **pixels**. If you
-    slide the row by the dp *number* interpreted as pixels, only a sliver shows
-    on most screens and the label is clipped. Convert with `LocalDensity`:
+  - **Unit-mismatch trap:** the reveal strip is sized in **dp** but
+    `graphicsLayer { translationX = ... }` is in **pixels**. If you slide the row
+    by the dp *number* interpreted as pixels, then on a typical ~2.75× density
+    screen a 96 dp strip is exposed by only ~35 px — a sliver — and the "Close"
+    label is clipped, so the action reads as a bare coloured rectangle. Convert
+    with `LocalDensity`:
     `val revealPx = with(LocalDensity.current) { revealWidthDp.toPx() }`, and
-    translate by `revealPx`.
+    translate by `revealPx` so the exposed strip exactly matches the action's
+    width.
 - **Unsaved-changes guard:** closing an item whose draft differs from its saved
   content opens an `AlertDialog` with **Cancel** and **Close anyway** (the
   latter tinted `error`).
@@ -488,18 +506,21 @@ else
 spec.using(SizeTransform(clip = false) { _, _ -> snap() })
 ```
 
-- **Diagonal-drift trap (already hit and fixed):** `AnimatedContent`'s default
-  `SizeTransform` **animates the container's height** while the horizontal slide
-  runs, so screens of different heights appear to drift in from a corner.
-  Snapping the size (`SizeTransform { _, _ -> snap() }`) makes size change
-  instantly so only the clean horizontal slide animates.
+- **Diagonal-drift trap:** `AnimatedContent`'s default `SizeTransform`
+  **animates the container's height** while the horizontal slide runs, so when
+  consecutive screens have different content heights the content appears to
+  drift in diagonally from a corner instead of sliding straight across. Snapping
+  the size (`SizeTransform { _, _ -> snap() }`) makes the size change instantly,
+  so only the clean horizontal slide animates. This is the single most common
+  cause of a "janky" hierarchy transition and is easy to miss because it only
+  shows up when adjacent screens differ in height.
 - Reuse this identical spec for **both** Item-1 navigation and Settings
   navigation so all hierarchy motion matches.
 
 ## B8. Content rendering / syntax highlighting
 
-The reference app highlights Markdown, but the pattern generalises to any
-structured plaintext:
+The concrete example here is Markdown highlighting, but the pattern generalises
+to any structured plaintext (task syntax, config keys, wiki markup):
 
 - **Colour and weight only, never size.** Communicate structure by colouring and
   weighting tokens; keep one font size so the character grid is stable. Force
@@ -611,21 +632,25 @@ structured plaintext:
 
 ## B13. Testing and verification
 
-- There is no automated suite in the reference app; when verifying by hand, the
-  paths most worth exercising are: granting and removing a workspace; the "all
-  items" list and search on a **large** folder; editing and saving an item then
-  confirming the edit is searchable; regenerating the index from the status
-  surface; deep folder drill-down with both the toolbar and the **system** back
-  button; closing an item with unsaved changes; and switching themes/fonts.
-- If you add tests, the plain `model/` types and the query-building/highlighting
-  helpers are pure Kotlin and the cheapest to cover.
+- An automated suite is optional for an app of this size; whether or not you
+  have one, the paths most worth exercising by hand are: granting and removing a
+  workspace; the "all items" list and search on a **large** folder (this is
+  where the SAF-cost and indexing decisions actually matter); editing and saving
+  an item then confirming the edit is immediately searchable; regenerating the
+  index from the status surface; deep folder drill-down using **both** the
+  toolbar back arrow and the **Android system** back button (to confirm they
+  behave identically); closing an item with unsaved changes; and switching
+  themes and fonts.
+- If you do add tests, the plain `model/` types and the
+  query-building/highlighting helpers are pure Kotlin with no Android
+  dependencies, so they are the cheapest and most valuable to cover first.
 
 ---
 
 # Appendix — the traps this spec exists to prevent
 
-A concise checklist distilled from problems already encountered and fixed in the
-reference app. Each maps to a section above.
+A concise checklist of the non-obvious mistakes this spec is designed to
+prevent. Each maps to a section above.
 
 - **Diagonal navigation animation** — caused by `AnimatedContent`'s default
   `SizeTransform` animating height. Snap the size. (B7)
