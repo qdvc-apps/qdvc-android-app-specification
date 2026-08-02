@@ -289,6 +289,15 @@ the traps that are easy to fall into — several of these are non-obvious and ha
 each cost real debugging time to diagnose, so they are documented here with
 their root cause rather than just their fix.
 
+**On naming:** Part A's generalized vocabulary (*item*, *structure*,
+*workspace*) is what's prescribed. The concrete identifiers that appear in the
+code and examples below — class names like `ItemRepository`, and Markdown-app
+specifics such as `notes_fts`, `docId`, or the `.md` filter — are
+**illustrative**: they show the pattern in a real, working form. Adopt the
+*pattern*, and name things to fit your own app; where an identifier is fixed by
+a platform or library (e.g. SQLite's `rowid`, `DocumentsContract` columns), that
+is called out explicitly.
+
 ## B0. Platform, language, and build
 
 - **Language / UI:** Kotlin with **Jetpack Compose** and **Material 3**. No XML
@@ -298,14 +307,23 @@ their root cause rather than just their fix.
   screens are Composables, not Activities or Fragments.
 - **SDK levels:** `minSdk = 26` (Android 8.0), `compile`/`targetSdk = 34`,
   **JDK 17**.
-- **Build:** Gradle with the Kotlin DSL. Compose is enabled via
-  `buildFeatures.compose` with a pinned `kotlinCompilerExtensionVersion`
-  matched to the Kotlin version. A known-good combination is Kotlin `1.9.24`
-  with compiler extension `1.5.14` and the Compose BOM `2024.06.00`. Note the
-  version coupling: on Kotlin 1.9.x the compiler extension is a separate pinned
-  version as shown; if you move to Kotlin 2.0+, the mechanism changes — drop the
-  extension version and apply the `org.jetbrains.kotlin.plugin.compose` plugin
-  instead.
+- **Build:** Gradle with the Kotlin DSL. On Kotlin 2.0 and later — the default
+  for anything built going forward — the Compose compiler ships with Kotlin, so
+  you enable Compose by applying the **`org.jetbrains.kotlin.plugin.compose`**
+  plugin with its version matched to your Kotlin version (declare it in the
+  version catalog, apply it in each module that uses Compose), alongside
+  `buildFeatures.compose = true`. You do **not** set
+  `kotlinCompilerExtensionVersion` — that field is removed under this mechanism,
+  and compiler options go in a `composeCompiler {}` block instead. (On AGP
+  9.0+, Kotlin support is built in, so the separate `kotlin.android` plugin may
+  not be needed either.)
+- **Legacy build note (pre-2.0 Kotlin only):** before Kotlin 2.0 the Compose
+  compiler was versioned independently and enabled via
+  `composeOptions { kotlinCompilerExtensionVersion = "…" }`, pinned to a version
+  compatible with your Kotlin release. A concrete known-good combination on that
+  older toolchain is Kotlin `1.9.24` + compiler extension `1.5.14` + Compose BOM
+  `2024.06.00`; keep it as an anchor only if you are deliberately staying on
+  Kotlin 1.9.x, and prefer the 2.0+ plugin mechanism above otherwise.
 - **Key dependencies:** Compose BOM (ui, graphics, material3,
   material-icons-extended, foundation); `activity-compose`;
   `lifecycle-viewmodel-compose`; **DataStore Preferences** (settings);
@@ -335,6 +353,17 @@ State flows one way and lives in one place.
 Reading rule for maintainers: *what state exists* → read the ViewModel; *how
 something is stored or fetched* → read the matching repository; screens are just
 projections of that state.
+
+**Where this pattern stops scaling:** one ViewModel owning all state is the
+right call at the four-surface scale this spec targets, but it is not unbounded.
+As surfaces multiply — many independent feature areas, each with substantial
+state of its own — the single ViewModel becomes a bottleneck: a growing
+God-object that is hard to reason about and a magnet for merge conflicts when
+several people touch it. The signal to split is when surfaces stop sharing
+state rather than when the file merely gets long; at that point, give
+independent feature areas their own scoped ViewModels (keeping the same
+unidirectional-state and repository discipline within each) rather than
+stretching the single one further.
 
 Recommended package layout:
 
@@ -385,8 +414,9 @@ app/
 
 ## B3. The Storage Access Framework (read before touching file access)
 
-This is the most constraint-driven part of the app and the easiest to break
-with a "cleaner" rewrite.
+This part of the app carries constraints that are not obvious from the code, and
+a "cleaner"-looking rewrite that ignores them will break in ways that fail
+silently rather than loudly. Read this section before changing anything here.
 
 - A **workspace is a tree URI** the user granted via
   `ActivityResultContracts.OpenDocumentTree()`. Immediately call
@@ -511,9 +541,9 @@ spec.using(SizeTransform(clip = false) { _, _ -> snap() })
   consecutive screens have different content heights the content appears to
   drift in diagonally from a corner instead of sliding straight across. Snapping
   the size (`SizeTransform { _, _ -> snap() }`) makes the size change instantly,
-  so only the clean horizontal slide animates. This is the single most common
-  cause of a "janky" hierarchy transition and is easy to miss because it only
-  shows up when adjacent screens differ in height.
+  so only the clean horizontal slide animates. It is easy to miss because it
+  only shows up when adjacent screens differ in height — a transition can look
+  perfect in testing and drift in production once the content changes.
 - Reuse this identical spec for **both** Item-1 navigation and Settings
   navigation so all hierarchy motion matches.
 
